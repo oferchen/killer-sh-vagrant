@@ -1,5 +1,7 @@
 #!/bin/bash
 set -ex
+INSTALL_TRIVY=true
+INSTALL_FALCO=true
 
 download_and_customize_script() {
     local url="https://raw.githubusercontent.com/killer-sh/cks-course-environment/master/cluster-setup/${INSTALL_SCRIPT}/install_master.sh"
@@ -9,8 +11,8 @@ download_and_customize_script() {
     script=$(echo "$script" | set_shebang)
     script=$(echo "$script" | adjust_architecture)
     script=$(echo "$script" | customize_kubeadm_init)
-    script=$(echo "$script" | add_trivy)
-    script=$(echo "$script" | add_falco)
+    [[ "$INSTALL_TRIVY" == "true" ]] && script=$(echo "$script" | add_trivy)
+    [[ "$INSTALL_FALCO" == "true" ]] && script=$(echo "$script" | add_falco)
     script=$(echo "$script" | fix_rm_usage)
 
     echo "$script"
