@@ -9,9 +9,9 @@ def architecture_config
 
   case host_arch
   when 'x86_64', 'amd64'
-    { box_name: "ubuntu/focal64", provider_name: "virtualbox" }
+    { box_name: "ubuntu/focal64", provider_name: "virtualbox", disk_size: '50GB' }
   when 'aarch64', 'arm64'
-    { box_name: "bento/ubuntu-20.04", provider_name: "vmware_desktop" }
+    { box_name: "bento/ubuntu-20.04", provider_name: "vmware_desktop", disk_size: nil }
   else
     raise "Unsupported architecture: #{host_arch}"
   end
@@ -32,25 +32,22 @@ def find_default_interface
 end
 
 def check_plugins
-  required_plugins = ["vagrant-disksize"]
-  missing_plugins = required_plugins.select { |plugin| not Vagrant.has_plugin?(plugin) }
-  if missing_plugins.any?
-    raise Vagrant::Errors::VagrantError.new, "Missing plugins: #{missing_plugins.join(', ')}. Please install them and rerun 'vagrant up'."
+  unless `uname -m`.chomp == 'arm64'
+    required_plugins = ["vagrant-disksize"]
+    missing_plugins = required_plugins.select { |plugin| not Vagrant.has_plugin?(plugin) }
+    if missing_plugins.any?
+      raise Vagrant::Errors::VagrantError.new, "Missing plugins: #{missing_plugins.join(', ')}. Please install them and rerun 'vagrant up'."
+    end
   end
 end
 
-def configure_provider(node, provider_name, vm_name, memory: 4096, cpus: 4, gui: false)
-  node.vm.provider provider_name do |provider|
-    case provider_name
-      when "virtualbox"
-        provider.name = vm_name.gsub('-', '_')
-      when /vmware/
-        provider.vmx["displayName"] = vm_name.gsub('-', '_')
-      end
-    provider.memory = memory
-    provider.cpus = cpus
-    provider.gui = gui
-    provider.vmx["ethernet0.virtualdev"] = "vmxnet3" if provider_name.include?("vmware")
+def configure_provider(node, config)
+  node.vm.provider config[:provider_name] do |provider|
+    provider.name = node.vm.hostname.gsub('-', '_')
+    provider.memory = 4096
+    provider.cpus = 4
+    provider.gui = false
+    provider.vmx["ethernet0.virtualdev"] = "vmxnet3" if config[:provider_name].include?("vmware")
   end
 end
 
@@ -61,12 +58,20 @@ def configure_network(node, ip)
 end
 
 def provision_node(node, role, ip)
-  configure_provider(node, $arch_conf[:provider_name], "#{role}")
-  node.vm.hostname = "#{role}"
+  $arch_conf = architecture_config
+  node.vm.box = $arch_conf[:box_name]
+  configure_provider(node, $arch_conf)
+  node.vm.hostname = role
   configure_network(node, ip)
-  node.vm.provision "setup-etc-hosts", type: "shell", privileged: true, path: "scripts/setup-etc-hosts.sh", args: [ip]
-  node.vm.provision "install-#{role}", type: "shell", privileged: true, env: {"DEBIAN_FRONTEND" => "noninteractive", "INSTALL_SCRIPT" => $install_script}, path: "scripts/install-#{role}.sh"
-  node.vm.provision 'shell', reboot: true
+
+  # Disk size configuration conditionally
+  if $arch_conf[:disk_size]
+    node.vm.disk :disk, size: $arch_conf[:disk_size], primary: true
+  end
+
+  node.vm.provision "shell", path: "scripts/setup-etc-hosts.sh", args: [ip], privileged: true
+  node.vm.provision "shell", path: "scripts/install-#{role}.sh", env: {"DEBIAN_FRONTEND" => "noninteractive"}, privileged: true
+  node.vm.provision "shell", reboot: true
 end
 
 $install_script = ENV['INSTALL_SCRIPT'] || "latest"
