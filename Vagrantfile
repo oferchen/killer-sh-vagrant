@@ -6,12 +6,11 @@ require 'json'
 
 def architecture_config
   host_arch = `uname -m`.chomp
-
   case host_arch
   when 'x86_64', 'amd64'
-    { box_name: "ubuntu/focal64", provider_name: "virtualbox", disk_size: '50GB' }
+    { box_name: "ubuntu/focal64", provider_name: "virtualbox", disk_size: '50GB', required_plugins: ['','vagrant-disksize'] }
   when 'aarch64', 'arm64'
-    { box_name: "bento/ubuntu-20.04", provider_name: "vmware_desktop", disk_size: nil }
+    { box_name: "bento/ubuntu-20.04", provider_name: "vmware_desktop", disk_size: nil, required_plugins: ['vagrant-vmware-desktop'] }
   else
     raise "Unsupported architecture: #{host_arch}"
   end
@@ -21,10 +20,8 @@ def find_default_interface
   os = RUBY_PLATFORM.include?("darwin") ? :macos : :linux
   case os
   when :linux
-    # This is usually 'eth0' on Linux or whatever the default interface is on the host
     `ip route | grep default | awk '{print $5}'`.strip
   when :macos
-    # This is usually 'en0: Wi-Fi (AirPort)' on a Macbook
     `route -n get default | grep interface | awk '{print $2}'`.strip
   else
     raise "Unsupported operating system. This script supports only macOS and Linux."
@@ -32,23 +29,19 @@ def find_default_interface
 end
 
 def check_plugins
-  unless `uname -m`.chomp == 'arm64'
-    required_plugins = ["vagrant-disksize"]
-    missing_plugins = required_plugins.select { |plugin| not Vagrant.has_plugin?(plugin) }
-    if missing_plugins.any?
-      raise Vagrant::Errors::VagrantError.new, "Missing plugins: #{missing_plugins.join(', ')}. Please install them and rerun 'vagrant up'."
-    end
+  $arch_conf = architecture_config
+  required_plugins = $arch_conf[:required_plugins]
+  missing_plugins = required_plugins.select { |plugin| not Vagrant.has_plugin?(plugin) }
+  if missing_plugins.any?
+    raise Vagrant::Errors::VagrantError.new, "Missing plugins: #{missing_plugins.join(', ')}. Please install them and rerun 'vagrant up'."
   end
 end
 
-def configure_provider(node, config)
-  node.vm.provider config[:provider_name] do |provider|
-    provider.name = node.vm.hostname.gsub('-', '_')
-    provider.memory = 4096
-    provider.cpus = 4
-    provider.gui = false
-    provider.vmx["ethernet0.virtualdev"] = "vmxnet3" if config[:provider_name].include?("vmware")
-  end
+def configure_provider(provider, config)
+  provider.memory = 4096
+  provider.cpus = 4
+  provider.gui = false
+  provider.vmx["ethernet0.virtualdev"] = "vmxnet3" if config[:provider_name].include?("vmware")
 end
 
 def configure_network(node, ip)
@@ -60,17 +53,15 @@ end
 def provision_node(node, role, ip)
   $arch_conf = architecture_config
   node.vm.box = $arch_conf[:box_name]
-  configure_provider(node, $arch_conf)
   node.vm.hostname = role
   configure_network(node, ip)
 
-  # Disk size configuration conditionally
-  if $arch_conf[:disk_size]
+  if $arch_conf[:disk_size] && !$arch_conf[:provider_name].include?("vmware_desktop")
     node.vm.disk :disk, size: $arch_conf[:disk_size], primary: true
   end
 
   node.vm.provision "shell", path: "scripts/setup-etc-hosts.sh", args: [ip], privileged: true
-  node.vm.provision "shell", path: "scripts/install-#{role}.sh", env: {"DEBIAN_FRONTEND" => "noninteractive"}, privileged: true
+  node.vm.provision "shell", path: "scripts/install-#{role}.sh", env: {"DEBIAN_FRONTEND" => "noninteractive", "INSTALL_SCRIPT" => $install_script }, privileged: true
   node.vm.provision "shell", reboot: true
 end
 
@@ -81,8 +72,11 @@ check_plugins
 
 Vagrant.configure("2") do |config|
   config.vm.box = $arch_conf[:box_name]
-  config.disksize.size = '50GB'
   config.vm.box_check_update = false
+
+  config.vm.provider $arch_conf[:provider_name] do |provider|
+    configure_provider(provider, $arch_conf)
+  end
 
   nodes = {
     "cks-master" => "192.168.5.10",
