@@ -47,7 +47,7 @@ add_falco() {
     curl -fsSL https://falco.org/repo/falcosecurity-packages.asc | sudo gpg --batch --dearmor -o /etc/apt/keyrings/falco-archive-keyring.gpg\n \
     echo deb [signed-by=/etc/apt/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main | sudo tee -a /etc/apt/sources.list.d/falcosecurity.list\n \
     apt-get update\n \
-    FALCO_FRONTEND=noninteractive FALCO_DRIVER_CHOICE=kmod apt-get install -y falco'
+    FALCO_FRONTEND=noninteractive FALCO_DRIVER_CHOICE=kmod apt-get install -y falco linux-headers-$(uname -r)'
 }
 
 fix_rm_usage() {

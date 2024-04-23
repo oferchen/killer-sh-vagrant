@@ -6,7 +6,7 @@ INSTALL_FALCO=true
 download_and_customize_script() {
     local url="https://raw.githubusercontent.com/killer-sh/cks-course-environment/master/cluster-setup/${INSTALL_SCRIPT}/install_master.sh"
     local script
-    script=$(curl -s "$url")
+    script=$(curl -ssL "$url")
 
     script=$(echo "$script" | set_shebang)
     script=$(echo "$script" | adjust_architecture)
@@ -58,7 +58,7 @@ add_falco() {
     curl -fsSL https://falco.org/repo/falcosecurity-packages.asc | sudo gpg --batch --dearmor -o /etc/apt/keyrings/falco-archive-keyring.gpg\n \
     echo deb [signed-by=/etc/apt/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main | sudo tee -a /etc/apt/sources.list.d/falcosecurity.list\n \
     apt-get update\n \
-    FALCO_FRONTEND=noninteractive FALCO_DRIVER_CHOICE=kmod apt-get install -y falco'
+    FALCO_FRONTEND=noninteractive FALCO_DRIVER_CHOICE=kmod apt-get install -y falco linux-headers-$(uname -r)'
 }
 
 fix_rm_usage() {
