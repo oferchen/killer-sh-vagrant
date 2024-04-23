@@ -8,7 +8,7 @@ def architecture_config
   host_arch = `uname -m`.chomp
   case host_arch
   when 'x86_64', 'amd64'
-    { box_name: "ubuntu/focal64", provider_name: "virtualbox", disk_size: '50GB', required_plugins: ['','vagrant-disksize'] }
+    { box_name: "ubuntu/focal64", provider_name: "virtualbox", disk_size: '50GB', required_plugins: ['vagrant-disksize'] }
   when 'aarch64', 'arm64'
     { box_name: "bento/ubuntu-20.04", provider_name: "vmware_desktop", disk_size: nil, required_plugins: ['vagrant-vmware-desktop'] }
   else
