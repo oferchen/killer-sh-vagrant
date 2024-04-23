@@ -33,9 +33,12 @@ def check_plugins
   required_plugins = $arch_conf[:required_plugins]
   missing_plugins = required_plugins.select { |plugin| not Vagrant.has_plugin?(plugin) }
   if missing_plugins.any?
+    puts "DEBUG: Required plugins - #{required_plugins.inspect}"
+    puts "DEBUG: Missing plugins - #{missing_plugins.inspect}"
     raise Vagrant::Errors::VagrantError.new, "Missing plugins: #{missing_plugins.join(', ')}. Please install them and rerun 'vagrant up'."
   end
 end
+
 
 def configure_provider(provider, config)
   provider.memory = 4096
